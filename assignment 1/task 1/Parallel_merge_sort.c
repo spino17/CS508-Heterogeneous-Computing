@@ -80,6 +80,37 @@ void merge(int * array, int start, int mid, int end) {
     }
 }
 
+// merge for concurrent processors
+int * mpi_merge(int * l, int * r, int size_l, int size_r) {
+    int i, j, k;
+    i = 0;
+    j = 0;
+    k = 0;
+    int * array = (int *)malloc(sizeof(int) * (size_l + size_r));
+    while (i < size_l && j < size_r) {
+        if (l[i] > r[j]){
+            array[k] = r[j];
+            k++;
+            j++;
+        } else {
+            array[k] = l[i];
+            k++;
+            i++;
+        }
+    }
+    while (i < size_l) {
+        array[k] = l[i];
+        k++;
+        i++;
+    }
+    while (j < size_r) {
+        array[k] = r[j];
+        k++;
+        j++;
+    }
+    return array;
+}
+
 // sort function for merge sort
 void merge_sort(int * array, int start, int end) {
     if(start < end) {
@@ -92,6 +123,7 @@ void merge_sort(int * array, int start, int end) {
 
 int main(int argc, char * argv[]) {
     int process_id, num_processes, array_size = 0, root = 0, i, send_count = 0;
+    MPI_Status status;
 
     // mpi initialization
     MPI_Init(&argc, &argv);
@@ -110,20 +142,33 @@ int main(int argc, char * argv[]) {
     MPI_Scatter(array, send_count, MPI_INT, recv_data, send_count, MPI_INT, root, MPI_COMM_WORLD);
     MPI_Barrier(MPI_COMM_WORLD); // wait to receive the data
     int sub_array_size = send_count;
-    for(i = 0; i < sub_array_size; i++) {
-        //printf("%d, id: %d\n", recv_data[i], process_id);
-    }
-    // all the respective array are stored in recv_data
     merge_sort(recv_data, 0, sub_array_size - 1); // sort the respective array
-    for(i = 0; i < sub_array_size; i++) {
-        printf("%d, id: %d\n", recv_data[i], process_id);
+    MPI_Barrier(MPI_COMM_WORLD);
+    int pow_acc = 2;
+    int size = sub_array_size; // initial array size
+    while (pow_acc < num_processes * 2) {
+        if (process_id % pow_acc == 0) {
+            int * l = recv_data;
+            int * r = (int *)malloc(sizeof(int) * size);
+            MPI_Recv(r, size, MPI_INT, process_id + (pow_acc / 2), process_id, MPI_COMM_WORLD, &status);
+            recv_data = mpi_merge(l, r, size, size);
+            free(l);
+            free(r);
+        } 
+        else if (process_id % (pow_acc / 2) == 0) {
+            MPI_Send(recv_data, size, MPI_INT, process_id - (pow_acc / 2), process_id - (pow_acc / 2), MPI_COMM_WORLD);
+            free(recv_data);
+        }
+        pow_acc = pow_acc * 2;
+        size = size * 2;
+        MPI_Barrier(MPI_COMM_WORLD);
     }
-    // rest of the computation on all processors
-/*
     if (process_id == root) {
-        write_array("sorted_array.txt", sorted_array, array_size); // root processor writes the sorted array
+        for(i = 0; i < array_size; i++) {
+            printf("%d\n", recv_data[i]);
+        }
+        write_array("sorted_array.txt", recv_data, array_size);
     }
-*/
     MPI_Finalize();
 
     return 0;

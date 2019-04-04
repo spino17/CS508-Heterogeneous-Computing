@@ -91,31 +91,39 @@ void merge_sort(int * array, int start, int end) {
 }
 
 int main(int argc, char * argv[]) {
-    int process_id, num_processes, array_size = 0, root = 0, i;
+    int process_id, num_processes, array_size = 0, root = 0, i, send_count = 0;
 
     // mpi initialization
     MPI_Init(&argc, &argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &process_id);
     MPI_Comm_size(MPI_COMM_WORLD, &num_processes);
+
+    int * recv_data = NULL;
+    int * array = NULL;
+    recv_data = (int *)malloc(sizeof(int) * MAX_SIZE); // to store respective part of the array
     if (process_id == root) {
-        int * array = (int *)malloc(sizeof(int) * MAX_SIZE);
+        array = (int *)malloc(sizeof(int) * MAX_SIZE);
         array = load_array("input_array.txt", &array_size); // root processor loads the input array
-        for(i = 0; i < array_size; i++) {
-            printf("%d\n", array[i]);
-        }
+    }
+    MPI_Bcast(&array_size, 1, MPI_INT, root, MPI_COMM_WORLD);
+    send_count = array_size / num_processes;
+    MPI_Scatter(array, send_count, MPI_INT, recv_data, send_count, MPI_INT, root, MPI_COMM_WORLD);
+    MPI_Barrier(MPI_COMM_WORLD); // wait to receive the data
+    int sub_array_size = send_count;
+    for(i = 0; i < sub_array_size; i++) {
+        //printf("%d, id: %d\n", recv_data[i], process_id);
+    }
+    // all the respective array are stored in recv_data
+    merge_sort(recv_data, 0, sub_array_size - 1); // sort the respective array
+    for(i = 0; i < sub_array_size; i++) {
+        printf("%d, id: %d\n", recv_data[i], process_id);
     }
     // rest of the computation on all processors
-
-    int * sorted_array = NULL;
-    if (process_id == root) {
-        sorted_array = malloc(sizeof(int) * array_size); // receive buffer array
-    }
-    // rest of the computation on all processors
-
+/*
     if (process_id == root) {
         write_array("sorted_array.txt", sorted_array, array_size); // root processor writes the sorted array
     }
-
+*/
     MPI_Finalize();
 
     return 0;

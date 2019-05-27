@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <mpi.h>
 #include <stdlib.h>
-#define MAX_SIZE 100
+#define MAX_SIZE 100000
 
 /*
 mpi program for merge sort 
@@ -164,9 +164,6 @@ int main(int argc, char * argv[]) {
         MPI_Barrier(MPI_COMM_WORLD);
     }
     if (process_id == root) {
-        for(i = 0; i < array_size; i++) {
-            printf("%d\n", recv_data[i]);
-        }
         write_array("sorted_array.txt", recv_data, array_size);
     }
     MPI_Finalize();
